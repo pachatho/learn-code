@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Asset Management | ระบบบริหารจัดการทรัพยากรไอที</title>
+  <!-- Google Fonts: Outfit & Noto Sans Thai -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS CDN (for Excel Import/Export) -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <!-- CSS Link -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden">
+    <span id="toast-icon" class="toast-icon"></span>
+    <span id="toast-message"></span>
+  </div>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo-box">
+          <i data-lucide="shield-alert" class="logo-icon"></i>
+        </div>
+        <div class="brand-text">
+          <h1>IT Asset</h1>
+          <p>Management System</p>
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <ul>
+          <li>
+            <button class="nav-btn active" data-tab="dashboard">
+              <i data-lucide="layout-dashboard"></i>
+              <span>แผงควบคุม (Dashboard)</span>
+            </button>
+          </li>
+          <li>
+            <button class="nav-btn" data-tab="assets">
+              <i data-lucide="laptop"></i>
+              <span>รายการสินทรัพย์ (Assets)</span>
+            </button>
+          </li>
+          <li>
+            <button class="nav-btn" data-tab="alerts">
+              <i data-lucide="bell-ring"></i>
+              <span>แจ้งเตือนหมดอายุ</span>
+              <span id="alert-count-badge" class="alert-badge hidden">0</span>
+            </button>
+          </li>
+          <li>
+            <button class="nav-btn" data-tab="logs">
+              <i data-lucide="history"></i>
+              <span>ประวัติกิจกรรม (Logs)</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <p>V 1.0.0 &bull; <span id="db-mode-badge">Cloudflare D1</span></p>
+        <p>&copy; 2026 IT Operations</p>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Navbar -->
+      <header class="top-navbar">
+        <div class="navbar-left">
+          <button id="sidebar-toggle" class="sidebar-toggle-btn">
+            <i data-lucide="menu"></i>
+          </button>
+          <h2 id="page-title">แดชบอร์ดสรุปสถิติ</h2>
+        </div>
+        <div class="navbar-right">
+          <button class="btn btn-secondary" id="btn-import-excel">
+            <i data-lucide="file-up"></i>
+            <span>นำเข้า Excel</span>
+          </button>
+          <button class="btn btn-primary" id="btn-add-asset">
+            <i data-lucide="plus-circle"></i>
+            <span>เพิ่มสินทรัพย์</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Content View -->
+      <div class="content-view">
+        
+        <!-- ================= TAB: DASHBOARD ================= -->
+        <section id="tab-dashboard" class="tab-pane active">
+          <!-- Summary Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon bg-red-light">
+                <i data-lucide="database" class="text-red"></i>
+              </div>
+              <div class="stat-info">
+                <h3>สินทรัพย์ทั้งหมด</h3>
+                <p class="stat-value" id="stat-total-assets">0</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-red-light">
+                <i data-lucide="coins" class="text-red"></i>
+              </div>
+              <div class="stat-info">
+                <h3>มูลค่าสินทรัพย์รวม</h3>
+                <p class="stat-value" id="stat-total-value">฿0.00</p>
+              </div>
+            </div>
+
+            <div class="stat-card cursor-pointer" id="card-alert-expired" data-alert-type="expired">
+              <div class="stat-icon bg-red-solid">
+                <i data-lucide="alert-triangle" class="text-white"></i>
+              </div>
+              <div class="stat-info">
+                <h3>หมดประกัน/หมดอายุสัญญา</h3>
+                <p class="stat-value text-red" id="stat-expired-assets">0</p>
+              </div>
+            </div>
+
+            <div class="stat-card cursor-pointer" id="card-alert-expiring" data-alert-type="expiring">
+              <div class="stat-icon bg-yellow-light">
+                <i data-lucide="clock" class="text-yellow"></i>
+              </div>
+              <div class="stat-info">
+                <h3>หมดอายุภายใน 30 วัน</h3>
+                <p class="stat-value text-yellow" id="stat-expiring-assets">0</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Overview Section -->
+          <div class="dashboard-details">
+            <!-- Left: Assets Status Summary -->
+            <div class="detail-box">
+              <div class="box-header">
+                <h3>สรุปตามสถานะการใช้งาน</h3>
+              </div>
+              <div class="box-content">
+                <div class="status-summary-list">
+                  <div class="status-summary-item">
+                    <span class="status-indicator status-active"></span>
+                    <span class="status-label">ใช้งานอยู่ (Active)</span>
+                    <span class="status-count" id="status-count-active">0</span>
+                  </div>
+                  <div class="status-summary-item">
+                    <span class="status-indicator status-storage"></span>
+                    <span class="status-label">เก็บในคลัง (Storage)</span>
+                    <span class="status-count" id="status-count-storage">0</span>
+                  </div>
+                  <div class="status-summary-item">
+                    <span class="status-indicator status-repair"></span>
+                    <span class="status-label">ส่งซ่อม (Repair)</span>
+                    <span class="status-count" id="status-count-repair">0</span>
+                  </div>
+                  <div class="status-summary-item">
+                    <span class="status-indicator status-retired"></span>
+                    <span class="status-label">ปลดระวาง (Retired)</span>
+                    <span class="status-count" id="status-count-retired">0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Upcoming Expirations -->
+            <div class="detail-box">
+              <div class="box-header">
+                <h3>สัญญารับประกัน/ลิขสิทธิ์ใกล้หมดอายุ (30 วันข้างหน้า)</h3>
+                <button class="text-btn" id="btn-view-all-alerts">ดูทั้งหมด</button>
+              </div>
+              <div class="box-content">
+                <div class="table-responsive">
+                  <table class="table-compact">
+                    <thead>
+                      <tr>
+                        <th>รหัส Asset</th>
+                        <th>ชื่อสินทรัพย์</th>
+                        <th>ประเภท</th>
+                        <th>วันหมดอายุ</th>
+                        <th>เหลือเวลา (วัน)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboard-expiring-tbody">
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-4">ไม่มีสินทรัพย์ที่กำลังจะหมดอายุเร็วๆ นี้</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ================= TAB: ASSET LIST ================= -->
+        <section id="tab-assets" class="tab-pane">
+          <!-- Filters Section -->
+          <div class="filter-card">
+            <div class="filter-inputs">
+              <div class="search-input-wrapper">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" id="filter-search" placeholder="ค้นหาด้วยรหัส, ชื่อ, ผู้ครอบครอง, แผนก, สถานที่...">
+              </div>
+              
+              <div class="select-wrapper">
+                <select id="filter-category">
+                  <option value="">ทุกประเภทหลัก (All)</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Software">Software</option>
+                  <option value="Network">Network</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div class="select-wrapper">
+                <select id="filter-status">
+                  <option value="">ทุกสถานะ (All)</option>
+                  <option value="Active">ใช้งานอยู่ (Active)</option>
+                  <option value="Storage">เก็บในคลัง (Storage)</option>
+                  <option value="Repair">ส่งซ่อม (Repair)</option>
+                  <option value="Retired">ปลดระวาง (Retired)</option>
+                </select>
+              </div>
+
+              <div class="select-wrapper">
+                <select id="filter-expiration">
+                  <option value="">สถานะหมดอายุ (All)</option>
+                  <option value="expired">หมดอายุแล้ว (Expired)</option>
+                  <option value="expiring">หมดอายุภายใน 30 วัน</option>
+                  <option value="safe">ประกันปกติ (Safe)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="filter-actions">
+              <button class="btn btn-secondary-outline" id="btn-clear-filters">
+                <i data-lucide="rotate-ccw"></i>
+                <span>ล้างตัวกรอง</span>
+              </button>
+              <button class="btn btn-success" id="btn-export-excel">
+                <i data-lucide="file-spreadsheet"></i>
+                <span>ส่งออก Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Table Section -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table id="assets-table">
+                <thead>
+                  <tr>
+                    <th>รหัส Asset</th>
+                    <th>ชื่อสินทรัพย์</th>
+                    <th>ประเภท</th>
+                    <th>สถานะ</th>
+                    <th>ผู้ถือครอง / แผนก</th>
+                    <th>วันซื้อ</th>
+                    <th>วันหมดอายุ</th>
+                    <th class="text-right">ราคาซื้อ (บาท)</th>
+                    <th class="text-center">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="assets-tbody">
+                  <!-- Dynamic content loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+            <!-- Table Pagination -->
+            <div class="pagination-container">
+              <p class="pagination-info" id="pagination-text">แสดง 0 ถึง 0 จากทั้งหมด 0 รายการ</p>
+              <div class="pagination-buttons" id="pagination-buttons">
+                <!-- Dynamic buttons -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ================= TAB: ALERTS ================= -->
+        <section id="tab-alerts" class="tab-pane">
+          <div class="alert-info-banner">
+            <div class="alert-info-icon">
+              <i data-lucide="info"></i>
+            </div>
+            <div class="alert-info-text">
+              <h3>เกี่ยวกับระบบตรวจสอบวันหมดอายุ</h3>
+              <p>ระบบจะตรวจหาวันหมดประกันของอุปกรณ์ (Hardware) หรือวันหมดอายุลิขสิทธิ์ของซอฟต์แวร์ (Software License) เพื่อช่วยวางแผนการต่อสัญญา หรือจัดซื้ออุปกรณ์ทดแทน โดยแบ่งระดับความเร่งด่วนตามสีการแจ้งเตือน</p>
+            </div>
+          </div>
+
+          <!-- Filter Category Tab for alerts -->
+          <div class="alert-tab-filters">
+            <button class="tab-sub-btn active" id="btn-alert-filter-all">ทั้งหมด</button>
+            <button class="tab-sub-btn" id="btn-alert-filter-expired"><span class="badge badge-red"></span> หมดอายุแล้ว</button>
+            <button class="tab-sub-btn" id="btn-alert-filter-expiring"><span class="badge badge-yellow"></span> จะหมดอายุภายใน 30 วัน</button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-responsive">
+              <table id="alerts-table">
+                <thead>
+                  <tr>
+                    <th>ระดับการเตือน</th>
+                    <th>รหัส Asset</th>
+                    <th>ชื่อสินทรัพย์</th>
+                    <th>ประเภทหลัก</th>
+                    <th>วันหมดอายุ</th>
+                    <th>เหลือเวลา (วัน)</th>
+                    <th>ผู้ถือครอง</th>
+                    <th>แผนก / สถานที่</th>
+                    <th class="text-center">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="alerts-tbody">
+                  <!-- Dynamic content -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ================= TAB: ACTIVITY LOGS ================= -->
+        <section id="tab-logs" class="tab-pane">
+          <div class="table-card">
+            <div class="table-header-simple">
+              <h3>ประวัติการทำกิจกรรมล่าสุดในระบบ</h3>
+              <span class="text-muted">(บันทึกย้อนหลังสูงสุด 100 รายการ)</span>
+            </div>
+            <div class="table-responsive">
+              <table id="logs-table">
+                <thead>
+                  <tr>
+                    <th>วัน-เวลา</th>
+                    <th>รหัส Asset</th>
+                    <th>กิจกรรม</th>
+                    <th>รายละเอียดการทำรายการ</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-tbody">
+                  <!-- Dynamic content -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ================= MODAL: ADD / EDIT ASSET ================= -->
+  <div id="modal-asset-form" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 id="modal-form-title">เพิ่มสินทรัพย์ใหม่</h3>
+        <button class="modal-close" id="btn-close-form-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <form id="asset-form">
+        <div class="modal-body">
+          <div class="form-grid">
+            <!-- Asset ID -->
+            <div class="form-group">
+              <label for="form-asset-id" class="required">รหัสสินทรัพย์ (Asset ID)</label>
+              <input type="text" id="form-asset-id" required placeholder="เช่น IT-HW-0009">
+              <span class="form-help">รหัสห้ามซ้ำกันในระบบ</span>
+            </div>
+
+            <!-- Name -->
+            <div class="form-group">
+              <label for="form-name" class="required">ชื่อสินทรัพย์ (Asset Name)</label>
+              <input type="text" id="form-name" required placeholder="เช่น ThinkPad T14s, Adobe CC">
+            </div>
+
+            <!-- Category -->
+            <div class="form-group">
+              <label for="form-category" class="required">ประเภทหลัก</label>
+              <select id="form-category" required>
+                <option value="">-- เลือกประเภทหลัก --</option>
+                <option value="Hardware">Hardware (ฮาร์ดแวร์)</option>
+                <option value="Software">Software (ซอฟต์แวร์/ลิขสิทธิ์)</option>
+                <option value="Network">Network (อุปกรณ์เครือข่าย)</option>
+                <option value="Other">Other (อื่นๆ)</option>
+              </select>
+            </div>
+
+            <!-- Subtype -->
+            <div class="form-group">
+              <label for="form-type">ประเภทชิ้นส่วน (Subtype)</label>
+              <input type="text" id="form-type" placeholder="เช่น Laptop, License, Monitor, Router">
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+              <label for="form-status" class="required">สถานะการใช้งาน</label>
+              <select id="form-status" required>
+                <option value="Active">ใช้งานอยู่ (Active)</option>
+                <option value="Storage">เก็บในคลัง (Storage)</option>
+                <option value="Repair">ส่งซ่อม (Repair)</option>
+                <option value="Retired">ปลดระวาง (Retired)</option>
+              </select>
+            </div>
+
+            <!-- Purchase Price -->
+            <div class="form-group">
+              <label for="form-purchase-price">ราคาที่ซื้อ (บาท)</label>
+              <input type="number" id="form-purchase-price" min="0" step="0.01" placeholder="เช่น 45000">
+            </div>
+
+            <!-- Purchase Date -->
+            <div class="form-group">
+              <label for="form-purchase-date">วันที่สั่งซื้อ/เริ่มต้น</label>
+              <input type="date" id="form-purchase-date">
+            </div>
+
+            <!-- Expiration Date -->
+            <div class="form-group">
+              <label for="form-expiration-date">วันที่หมดประกัน/สัญญาหมดอายุ</label>
+              <input type="date" id="form-expiration-date">
+              <span class="form-help">วันที่หมดอายุรับประกัน หรือ ลิขสิทธิ์ซอฟต์แวร์</span>
+            </div>
+
+            <!-- Assignee -->
+            <div class="form-group">
+              <label for="form-assignee">ผู้ถือครอง (Assignee)</label>
+              <input type="text" id="form-assignee" placeholder="ชื่อ-นามสกุลพนักงาน">
+            </div>
+
+            <!-- Department -->
+            <div class="form-group">
+              <label for="form-department">แผนก (Department)</label>
+              <input type="text" id="form-department" placeholder="เช่น Marketing, Engineering">
+            </div>
+
+            <!-- Location -->
+            <div class="form-group">
+              <label for="form-location">สถานที่ตั้ง/ใช้งาน</label>
+              <input type="text" id="form-location" placeholder="เช่น HQ Officeชั้น 3, Server Room B">
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group col-span-2">
+              <label for="form-notes">หมายเหตุเพิ่มเติม</label>
+              <textarea id="form-notes" rows="3" placeholder="รายละเอียดอื่นๆ เช่น สเปกเครื่อง, ลิงก์เอกสาร หรือประวัติการชำรุด"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary-outline" id="btn-cancel-form">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-form">บันทึกข้อมูล</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================= MODAL: VIEW DETAILS & QR CODE ================= -->
+  <div id="modal-view-detail" class="modal-overlay hidden">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <h3>รายละเอียดและคิวอาร์โค้ดสินทรัพย์</h3>
+        <button class="modal-close" id="btn-close-view-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-layout">
+          <!-- Details Left -->
+          <div class="detail-info-pane">
+            <h2 id="view-title" class="detail-main-title">ThinkPad X1 Carbon Gen 11</h2>
+            <div class="detail-id-badge">
+              <span class="label">รหัสสินค้า:</span>
+              <span id="view-asset-id" class="value">IT-HW-0003</span>
+            </div>
+
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">ประเภทหลัก</span>
+                <span class="detail-value" id="view-category">Hardware</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">ประเภทชิ้นส่วน</span>
+                <span class="detail-value" id="view-type">Laptop</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">สถานะการใช้งาน</span>
+                <span class="detail-value" id="view-status">
+                  <span class="status-pill status-active">ใช้งานอยู่</span>
+                </span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">ราคาจัดซื้อ</span>
+                <span class="detail-value" id="view-purchase-price">฿68,000.00</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">วันที่จัดซื้อ</span>
+                <span class="detail-value" id="view-purchase-date">05/08/2024</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">วันหมดสัญญา/หมดประกัน</span>
+                <span class="detail-value" id="view-expiration-date">05/08/2027</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">ผู้ถือครอง</span>
+                <span class="detail-value" id="view-assignee">Wichai Rungruang</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">แผนก</span>
+                <span class="detail-value" id="view-department">Sales</span>
+              </div>
+              <div class="detail-item col-span-2">
+                <span class="detail-label">สถานที่ตั้ง</span>
+                <span class="detail-value" id="view-location">HQ Office - Fl 2</span>
+              </div>
+              <div class="detail-item col-span-2">
+                <span class="detail-label">หมายเหตุ</span>
+                <span class="detail-value note-box" id="view-notes">-</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Details Right: QR & Expiration countdown -->
+          <div class="detail-qr-pane">
+            <!-- QR Card -->
+            <div class="qr-card">
+              <h4>Asset QR Tag</h4>
+              <div class="qr-code-placeholder" id="qr-container">
+                <!-- Generated QR Code image will be appended here -->
+                <div class="qr-loading">สร้างคิวอาร์โค้ด...</div>
+              </div>
+              <p class="qr-info">สแกนเพื่อตรวจสอบข้อมูลอุปกรณ์นี้</p>
+              <button class="btn btn-secondary-outline btn-sm w-full mt-2" id="btn-print-qr">
+                <i data-lucide="printer"></i> พิมพ์แถบป้าย
+              </button>
+            </div>
+
+            <!-- Expiration Alert Card in detail -->
+            <div class="expiration-status-card" id="detail-expiration-card">
+              <div class="card-icon">
+                <i data-lucide="shield-check" id="detail-expiration-icon"></i>
+              </div>
+              <div class="card-text">
+                <h5 id="detail-expiration-title">สถานะความคุ้มครองปกติ</h5>
+                <p id="detail-expiration-desc">เหลือระยะเวลาประกันอีก 420 วัน</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-logs-section">
+          <h4>ประวัติกิจกรรมการปรับปรุงข้อมูล</h4>
+          <div class="table-responsive">
+            <table class="table-compact">
+              <thead>
+                <tr>
+                  <th>วัน-เวลา</th>
+                  <th>กิจกรรม</th>
+                  <th>รายละเอียดการแก้ไข</th>
+                </tr>
+              </thead>
+              <tbody id="view-asset-logs-tbody">
+                <!-- Dynamic logs -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= MODAL: EXCEL IMPORT ================= -->
+  <div id="modal-import-excel" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>นำเข้าข้อมูลด้วยไฟล์ Excel</h3>
+        <button class="modal-close" id="btn-close-import-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="import-template-info">
+          <div class="info-icon text-red">
+            <i data-lucide="file-spreadsheet"></i>
+          </div>
+          <div class="info-text">
+            <h4>คำแนะนำสำหรับการเตรียมไฟล์นำเข้า</h4>
+            <p>เพื่อนำเข้าไฟล์สำเร็จ ควรตั้งชื่อหัวตารางให้ตรงกับรูปแบบระบบ เช่น <code>asset_id</code>, <code>name</code>, <code>category</code>, <code>type</code>, <code>status</code>, <code>purchase_date</code>, <code>purchase_price</code>, <code>expiration_date</code>, <code>assignee</code>, <code>department</code>, <code>location</code>, <code>notes</code></p>
+            <button class="text-btn font-semibold mt-1" id="btn-download-template">
+              <i data-lucide="download"></i> ดาวน์โหลดตัวอย่างเทมเพลตไฟล์ Excel
+            </button>
+          </div>
+        </div>
+
+        <div class="drop-zone" id="excel-drop-zone">
+          <div class="drop-zone-content">
+            <i data-lucide="cloud-upload" class="drop-icon"></i>
+            <p class="drop-title">ลากไฟล์ Excel มาวางที่นี่ หรือคลิกเพื่อค้นหา</p>
+            <p class="drop-sub">รองรับเฉพาะนามสกุลไฟล์ .xlsx, .xls</p>
+          </div>
+          <input type="file" id="excel-file-input" class="hidden-input" accept=".xlsx, .xls">
+        </div>
+
+        <!-- Preview uploaded table -->
+        <div class="import-preview-section hidden" id="import-preview-section">
+          <h4>ข้อมูลตัวอย่างไฟล์ที่อัปโหลด (<span id="import-preview-count">0</span> รายการ)</h4>
+          <div class="table-responsive max-h-60">
+            <table class="table-compact text-xs">
+              <thead>
+                <tr>
+                  <th>asset_id</th>
+                  <th>name</th>
+                  <th>category</th>
+                  <th>status</th>
+                  <th>expiration_date</th>
+                  <th>assignee</th>
+                </tr>
+              </thead>
+              <tbody id="import-preview-tbody">
+                <!-- Preview rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary-outline" id="btn-cancel-import">ยกเลิก</button>
+        <button class="btn btn-primary" id="btn-submit-import" disabled>
+          <i data-lucide="upload"></i> เริ่มนำเข้าข้อมูล
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Link -->
+  <script src="app.js"></script>
+</body>
+</html>

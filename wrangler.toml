@@ -1,0 +1,12 @@
+name = "it-asset-manager"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[assets]
+directory = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "it-asset-db"
+database_id = "fadba6d6-79c4-4d22-8c08-60378982393c"
+migrations_dir = "migrations"
